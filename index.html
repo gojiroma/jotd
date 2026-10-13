@@ -88,7 +88,7 @@
   t.addEventListener('touchstart', () => { lp = setTimeout(() => open(), 600); }, { passive: true });
   ['touchend', 'touchmove', 'touchcancel'].forEach(ev => t.addEventListener(ev, () => clearTimeout(lp), { passive: true }));
 
-  $('exp').onclick = () => {
+  const doExport = () => {
     flush();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([t.value], { type: 'text/markdown' }));
@@ -96,8 +96,8 @@
     a.click();
     URL.revokeObjectURL(a.href);
     try { localStorage.setItem(EXP, day(new Date())); } catch {}
-    close();
   };
+  $('exp').onclick = () => { doExport(); close(); };
   $('imp').onclick = () => $('file').click();
   $('file').onchange = async e => {
     const f = e.target.files[0];
@@ -127,9 +127,9 @@
   show();
   t.focus();
 
-  // first launch of the day: prompt for export
+  // first launch of the day: export silently
   let last = ''; try { last = localStorage.getItem(EXP) || ''; } catch {}
-  if (last !== day(new Date()) && hist.length > 1) open('今日の最初のエクスポートをどうぞ');
+  if (last !== day(new Date()) && hist.length > 1) doExport();
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
