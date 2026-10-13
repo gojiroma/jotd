@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>jotd</title>
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; }
+  #t {
+    position: fixed; inset: 0; width: 100vw; height: 100dvh; box-sizing: border-box;
+    padding: 4vmin; border: 0; outline: 0; resize: none; background: #fff;
+    color: #8cc0ee; caret-color: #8cc0ee;
+    font: 30pt/1.5 system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  }
+  #m { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(255,255,255,.7); }
+  #m.on { display: flex; }
+  #m div { background: #fff; border: 1px solid #cfe4f8; border-radius: 12px; padding: 16px; box-shadow: 0 4px 24px rgba(0,0,0,.1); text-align: center; }
+  #m p { margin: 0 0 12px; color: #8cc0ee; font: 14px system-ui, sans-serif; }
+  #m button { display: block; width: 220px; margin: 8px 0 0; padding: 12px; font: 18px system-ui, sans-serif; color: #5aa0dc; background: #eef6fe; border: 0; border-radius: 8px; cursor: pointer; }
+</style>
+</head>
+<body>
+<textarea id="t" spellcheck="false" autofocus></textarea>
+<div id="m"><div>
+  <p id="msg">Esc で閉じる</p>
+  <button id="imp">インポート</button>
+  <button id="exp">エクスポート</button>
+</div></div>
+<input type="file" id="file" accept=".md,.txt,text/*" hidden>
+<script>
+(() => {
+  const KEY = 'jotd.hist', EXP = 'jotd.export';
+  const $ = id => document.getElementById(id);
+  const t = $('t'), menu = $('m');
+  const pad = n => String(n).padStart(2, '0');
+  const day = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const initial = () => {
+    const d = new Date();
+    return `# ${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）\n- `;
+  };
+
+  // history: [[timestamp, text], ...]; the last entry is the current note
+  let hist = [];
+  try { hist = JSON.parse(localStorage.getItem(KEY)) || []; } catch {}
+  if (!hist.length) hist = [[Date.now(), initial()]];
+  let idx = hist.length - 1, timer = 0;
+
+  const save = () => {
+    try { localStorage.setItem(KEY, JSON.stringify(hist)); }
+    catch { // quota: drop the oldest half and retry once
+      hist = hist.slice(hist.length >> 1); idx = hist.length - 1;
+      try { localStorage.setItem(KEY, JSON.stringify(hist)); } catch {}
+    }
+  };
+  const show = () => {
+    t.value = hist[idx][1];
+    t.setSelectionRange(t.value.length, t.value.length);
+    document.title = idx === hist.length - 1 ? 'jotd' : new Date(hist[idx][0]).toLocaleString('ja-JP');
+  };
+  const push = v => {
+    if (hist[hist.length - 1][1] === v) { idx = hist.length - 1; return; }
+    hist.push([Date.now(), v]); idx = hist.length - 1; save();
+    document.title = 'jotd';
+  };
+  const flush = () => { clearTimeout(timer); timer = 0; push(t.value); };
+  const step = d => {
+    flush();
+    const n = idx + d;
+    if (n < 0 || n >= hist.length) return;
+    idx = n; show();
+  };
+
+  t.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(flush, 400);
+  });
+
+  // menu
+  const open = msg => { $('msg').textContent = msg || 'Esc で閉じる'; menu.classList.add('on'); };
+  const close = () => { menu.classList.remove('on'); t.focus(); };
+  menu.addEventListener('click', e => { if (e.target === menu) close(); });
+  t.addEventListener('contextmenu', e => { e.preventDefault(); open(); });
+  let lp;
+  t.addEventListener('touchstart', () => { lp = setTimeout(() => open(), 600); }, { passive: true });
+  ['touchend', 'touchmove', 'touchcancel'].forEach(ev => t.addEventListener(ev, () => clearTimeout(lp), { passive: true }));
+
+  $('exp').onclick = () => {
+    flush();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([t.value], { type: 'text/markdown' }));
+    a.download = `jotd-${day(new Date())}.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    try { localStorage.setItem(EXP, day(new Date())); } catch {}
+    close();
+  };
+  $('imp').onclick = () => $('file').click();
+  $('file').onchange = async e => {
+    const f = e.target.files[0];
+    if (f) { push(await f.text()); show(); }
+    e.target.value = '';
+    close();
+  };
+
+  document.addEventListener('keydown', e => {
+    if (e.isComposing) return;
+    const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (mod && k === 'o') { e.preventDefault(); open(); }
+    else if (mod && k === 'z') { e.preventDefault(); step(e.shiftKey ? 1 : -1); }
+    else if (e.ctrlKey && k === 'y') { e.preventDefault(); step(1); }
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      if (menu.classList.contains('on')) return close();
+      flush();
+      const text = t.value;
+      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).catch(() => {
+        t.select(); document.execCommand('copy');
+      });
+      push(initial()); show();
+    }
+  });
+
+  show();
+  t.focus();
+
+  // first launch of the day: prompt for export
+  let last = ''; try { last = localStorage.getItem(EXP) || ''; } catch {}
+  if (last !== day(new Date()) && hist.length > 1) open('今日の最初のエクスポートをどうぞ');
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
