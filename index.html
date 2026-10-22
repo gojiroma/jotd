@@ -124,6 +124,17 @@
   document.addEventListener('keydown', e => {
     if (e.isComposing) return;
     const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (e.key === 'Enter' && !mod && !e.shiftKey && !e.altKey && t.selectionStart === t.selectionEnd) {
+      const p = t.selectionStart, from = t.value.lastIndexOf('\n', p - 1) + 1;
+      const m = /^([ \t]*)([-*+] )/.exec(t.value.slice(from, p));
+      if (m) {
+        e.preventDefault();
+        if (from + m[0].length === p) t.setRangeText('', from, p, 'end'); // empty bullet: end the list
+        else t.setRangeText('\n' + m[0], p, p, 'end');
+        t.dispatchEvent(new Event('input'));
+        return;
+      }
+    }
     if (mod && (k === '=' || k === '+' || k === ';')) { e.preventDefault(); setFs(fs + 2); }
     else if (mod && (k === '-' || k === '_')) { e.preventDefault(); setFs(fs - 2); }
     else if (mod && k === '0') { e.preventDefault(); setFs(30); }
