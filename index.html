@@ -135,6 +135,25 @@
         return;
       }
     }
+    if (e.key === 'Tab' && !mod && !e.altKey) {
+      e.preventDefault();
+      const a = t.selectionStart, b = t.selectionEnd, v = t.value;
+      const from = v.lastIndexOf('\n', a - 1) + 1;
+      let to = v.indexOf('\n', b); if (to < 0) to = v.length;
+      let first = 0, total = 0;
+      const out = v.slice(from, to).split('\n').map((l, i) => {
+        const n = e.shiftKey ? (/^( {1,2}|\t)/.exec(l) || [''])[0].length : 2;
+        const r = e.shiftKey ? l.slice(n) : '  ' + l;
+        const d = r.length - l.length;
+        if (i === 0) first = d;
+        total += d;
+        return r;
+      }).join('\n');
+      t.setRangeText(out, from, to, 'preserve');
+      t.setSelectionRange(Math.max(from, a + first), Math.max(from, b + total));
+      t.dispatchEvent(new Event('input'));
+      return;
+    }
     if (mod && (k === '=' || k === '+' || k === ';')) { e.preventDefault(); setFs(fs + 2); }
     else if (mod && (k === '-' || k === '_')) { e.preventDefault(); setFs(fs - 2); }
     else if (mod && k === '0') { e.preventDefault(); setFs(30); }
